@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, dialog, app } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -10,6 +10,24 @@ const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
+ipcMain.handle("select-files", async (event, options) => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  if (!win2) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win2, {
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "Image", extensions: ["jpg", "png"] }],
+    ...options
+  });
+  return canceled ? null : filePaths;
+});
+ipcMain.handle("select-directory", async (event) => {
+  const win2 = BrowserWindow.getFocusedWindow();
+  if (!win2) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win2, {
+    properties: ["openDirectory"]
+  });
+  return canceled ? null : filePaths[0];
+});
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),

@@ -29,11 +29,9 @@ interface KV {
 }
 
 const predictResult = ref<PredictData[]>([])
-const imgList = ref<UploadUserFile[]>([])
 const selectedOptions = ref<string[]>([])
 const cachedImages = ref<CachedImage[]>([])
 const typeMapper: KV = {'floors': '楼层数识别', 'add': '加层分析', 'material': '材质识别', 'hidden': '隐患检测'}
-
 const sampleImageList = [
   {'url': '/valid_sample.jpg', desc:'楼层识别图像示例-1'},
   {'url': '/valid_sample2.jpg', desc:'楼层识别图像示例-2'}
@@ -42,6 +40,15 @@ const picShowValue = ref('示例图片')
 const picShowValueList = ['示例图片', '已选择']
 const onLoading = ref(false)
 const uploadRef = ref<UploadInstance>() 
+const folderInput = ref<HTMLInputElement | null>(null)
+const directoryFiles = ref<File[]>([])
+
+const showingUploadedImage = ref<CachedImage[]>([])
+const uploadPage = ref(1)
+const uploadShowCount = ref(50)
+
+const resultPage = ref(1)
+const resultShowCount = ref(50)
 
 const beforeUpload = (file: UploadUserFile) => {
   let raw = file.raw
@@ -70,18 +77,35 @@ const beforeUpload = (file: UploadUserFile) => {
   }
 }
 
-const handleUploadChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
-  imgList.value = uploadFiles
-  console.log(uploadFile, uploadFiles)
-  cachedImages.value.length = 0
-  for (let i=0; i<uploadFiles.length; i++) {
-    cachedImages.value.push({name:uploadFiles[i].name, url:uploadFiles[i].url})
-  }
-  picShowValue.value = picShowValueList[1]
+const updateShowingUploadImage = (operationStartIndex: number) => {
+    const startIndex = (uploadPage.value - 1) * uploadShowCount.value
+    if (startIndex + uploadShowCount.value >= operationStartIndex) {
+        showingUploadedImage.value = cachedImages.value.slice(startIndex, startIndex+uploadShowCount.value)
+    }
 }
 
+const handleUploadChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+    console.log(uploadFile, uploadFiles)
+    if (uploadFile.raw) {
+        directoryFiles.value.push(uploadFile.raw)
+        const originLength = cachedImages.value.length
+        cachedImages.value.length = 0
+        directoryFiles.value.forEach((element)=>{
+            cachedImages.value.push({name: element.name, url: URL.createObjectURL(element)})
+        })
+        updateShowingUploadImage(originLength)
+        picShowValue.value = picShowValueList[1]
+    } else {
+        // TODO
+        return
+    }
+    console.log("DF", directoryFiles.value)
+}
+
+
+
 const checkFilesExist = () => {
-  if (imgList.value.length == 0) {
+  if (directoryFiles.value.length == 0) {
     ElNotification({
       title: '错误',
       message: '未选择图片！',
@@ -109,60 +133,49 @@ const checkOptions = () => {
 const tryToPredict = (event: Event) => {
   if (event) {
     if (checkFilesExist() && checkOptions()) {
-      onLoading.value = true
-      let form = new FormData()
-      for (let index=0; index<imgList.value.length; index++) {
-        let file = imgList.value[index].raw
-        if (file) {
-          form.append('options', JSON.stringify(selectedOptions.value))
-          form.append('image', file)
-        } else {
-          ElNotification({
-            title: '错误',
-            message: '文件不存在！',
-            type: 'error',
-            duration: 1500
-          })
-          return
-        }
-    }
-    axios.post('http://127.0.0.1:8000/building/', form, {
-        headers: {
-        "Content-Type": "multipart/form-data"
-        }
-    }).then(response => {
-        console.log("上传完成", response.data)
-        ElNotification({
-            title: '完成',
-            message: '识别完成！',
-            type: 'success',
-            duration: 1500
+        onLoading.value = true
+        let form = new FormData()
+        directoryFiles.value.forEach((e)=>{
+            form.append('options', JSON.stringify(selectedOptions.value))
+            form.append('image', e)
         })
-        let _data = response.data
-        let _content: ResponseType[] = _data['content']
-        
-        for (let i=0; i<_content.length; i++) {
-            let res = _content[i]
-            predictResult.value.push({date: (new Date()).toLocaleDateString(), content: res['result'], type:typeMapper[res['type']], image_name:res['name']})
-        }
-    }).catch(error => {
-        console.log(error)
-        ElNotification({
-            title: '错误',
-            message: '识别失败！',
-            type: 'error',
-            duration: 1500
+        axios.post('http://127.0.0.1:8000/building/', form, {
+            headers: {
+            "Content-Type": "multipart/form-data"
+            }
+        }).then(response => {
+            console.log("上传完成", response.data)
+            ElNotification({
+                title: '完成',
+                message: '识别完成！',
+                type: 'success',
+                duration: 1500
+            })
+            let _content: ResponseType[] = response.data['content']
+            _content.forEach((e)=>{
+                predictResult.value.push({date: (new Date()).toLocaleDateString(), content: e['result'], type:typeMapper[e['type']], image_name:e['name']})
+            })
+        }).catch(error => {
+            console.log(error)
+            ElNotification({
+                title: '错误',
+                message: '识别失败！',
+                type: 'error',
+                duration: 1500
+            })
+        }).finally(() => {
+            onLoading.value = false
         })
-    }).finally(() => {
-        onLoading.value = false
-    })
     }
   }
 }
 
-const deleteRow = (index: number) => {
-    imgList.value.splice(index, 1)
+// 结果表格处理
+const deleteRow = (rel_index: number) => {
+    const index = rel_index + (uploadPage.value - 1) * uploadShowCount.value
     cachedImages.value.splice(index, 1)
+    directoryFiles.value.splice(index, 1)
+    updateShowingUploadImage(0)
 }
 
 const tableRowClassName = ({
@@ -184,6 +197,37 @@ const tableRowClassName = ({
     }
 }
 
+// 文件夹处理
+const handleFileChange = (event: Event) => {
+    if (event) {
+        const input = event.target as HTMLInputElement
+        if (!input.files || input.files.length == 0) {
+            return
+        }
+        try {
+            const files = Array.from(input.files).filter(file => file.type.startsWith('image/'))
+            console.log(files)
+            directoryFiles.value.concat(files)
+            cachedImages.value.length = 0
+            files.forEach((element)=>{
+                cachedImages.value.push({name:element.name, url:URL.createObjectURL(element)})
+            })
+            updateShowingUploadImage(0)
+            console.log(directoryFiles)
+            console.log(cachedImages)
+        } catch (error) {
+            console.log(error)
+        }
+    }
+}
+
+const uploadFileDirectory = (event: Event) => {
+    if (event) {
+        folderInput.value?.click()
+    }
+}
+
+
 const writeToExcel = () => {
 
 }
@@ -198,7 +242,6 @@ const writeToExcel = () => {
                         <div style="text-align: left; width: 100%; font-weight: bold; margin-bottom: 20px;">上传</div>
                         <el-upload
                             ref="uploadRef"
-                            v-model:file-list="imgList"
                             class="upload-demo"
                             drag
                             action="#"
@@ -219,9 +262,10 @@ const writeToExcel = () => {
                                 </div>
                             </template>
                         </el-upload>
-                        <el-button type="success" style="margin-top: 30px; width: 100%;">
+                        <el-button type="success" style="margin-top: 30px; width: 100%;" @click="uploadFileDirectory">
                             上传文件夹
                         </el-button>
+                        <input ref="folderInput" type="file" id="file" hidden @change="handleFileChange" webkitdirectory>
                     </el-card>
                 </div>
                 <div style="height: 50%;">
@@ -285,20 +329,24 @@ const writeToExcel = () => {
                             </el-carousel-item>
                         </el-carousel>
                         <div v-else>
-                            <el-empty v-if="imgList.length == 0" description="暂无图片" />
-                            <el-table v-else :data="cachedImages" :show-header="false" height="400px">
-                                <el-table-column width="120">
-                                    <template #default="scope">
-                                        <el-image preview-teleported :src="scope.row.url" />
-                                    </template>
-                                </el-table-column>
-                                <el-table-column prop="name" width="240"/>
-                                <el-table-column fixed="right">
-                                    <template #default="scope">
-                                        <el-button @click.prevent="deleteRow(scope.$index)" style="border: none;"><el-icon><Delete /></el-icon></el-button>
-                                    </template>
-                                </el-table-column>
-                            </el-table>
+                            <el-empty v-if="directoryFiles.length == 0" description="暂无图片" />
+                            <div v-else>
+                                <el-table :data="showingUploadedImage" :show-header="false" height="400px">
+                                    <el-table-column width="120">
+                                        <template #default="scope">
+                                            <el-image preview-teleported :src="scope.row.url" />
+                                        </template>
+                                    </el-table-column>
+                                    <el-table-column prop="name" width="240"/>
+                                    <el-table-column fixed="right">
+                                        <template #default="scope">
+                                            <el-button @click.prevent="deleteRow(scope.$index)" style="border: none;"><el-icon><Delete /></el-icon></el-button>
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
+                                <el-pagination layout="total, prev, pager, next, jumper" :total="cachedImages.length" />
+                            </div>
+                            
                         </div>
                     </el-card>
                 </div>

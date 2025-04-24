@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -25,6 +25,29 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+
+ipcMain.handle('select-files', async (event, options)=>{
+  const win = BrowserWindow.getFocusedWindow()
+  if (!win) return null
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+  properties: ['openFile', 'multiSelections'],
+  filters: [{ name: 'Image', extensions: ['jpg', 'png']}],
+  ...options
+  })
+  return canceled ? null : filePaths
+})
+
+ipcMain.handle('select-directory', async (event)=>{
+  const win = BrowserWindow.getFocusedWindow()
+  if (!win) return null
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ['openDirectory']
+  })
+
+  return canceled ? null : filePaths[0]
+})
 
 function createWindow() {
   win = new BrowserWindow({
