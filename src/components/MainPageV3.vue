@@ -5,6 +5,7 @@ import { ElNotification, type UploadProps, type UploadUserFile, type UploadInsta
 import axios from 'axios'
 import ExcelJS from 'exceljs'
 
+
 interface PredictData {
   date: Date | string,
   image_name: string,
@@ -28,6 +29,15 @@ interface KV {
     [key: string]: string
 }
 
+class PathFile extends File {
+    absPath?: string | undefined = ''
+
+    constructor(fileBits: BlobPart[], fileName: string, path?: string, options?: FilePropertyBag) {
+        super(fileBits, fileName, options)
+        this.absPath = path
+    }
+}
+
 const predictResult = ref<PredictData[]>([])
 const selectedOptions = ref<string[]>([])
 const cachedImages = ref<CachedImage[]>([])
@@ -40,8 +50,7 @@ const picShowValue = ref('示例图片')
 const picShowValueList = ['示例图片', '已选择']
 const onLoading = ref(false)
 const uploadRef = ref<UploadInstance>() 
-const folderInput = ref<HTMLInputElement | null>(null)
-const directoryFiles = ref<File[]>([])
+const directoryFiles = ref<PathFile[]>([])
 
 const showingUploadedImage = ref<CachedImage[]>([])
 const uploadPage = ref(1)
@@ -198,32 +207,25 @@ const tableRowClassName = ({
 }
 
 // 文件夹处理
-const handleFileChange = (event: Event) => {
-    if (event) {
-        const input = event.target as HTMLInputElement
-        if (!input.files || input.files.length == 0) {
-            return
-        }
-        try {
-            const files = Array.from(input.files).filter(file => file.type.startsWith('image/'))
-            console.log(files)
-            directoryFiles.value.concat(files)
-            cachedImages.value.length = 0
-            files.forEach((element)=>{
-                cachedImages.value.push({name:element.name, url:URL.createObjectURL(element)})
-            })
-            updateShowingUploadImage(0)
-            console.log(directoryFiles)
-            console.log(cachedImages)
-        } catch (error) {
-            console.log(error)
-        }
-    }
-}
-
 const uploadFileDirectory = (event: Event) => {
     if (event) {
-        folderInput.value?.click()
+        // folderInput.value?.click()
+        window.ipcRenderer.invoke('select-directory').then((value: string[])=>{
+            value.forEach((f)=>{
+                window.ipcRenderer.invoke('read-file', f).then((fileData)=>{
+                    const blob = new Blob([fileData.buffer], { type: fileData.fileType });
+                    const file: PathFile = new File([blob], fileData.fileName, {
+                        type: fileData.fileType,
+                        lastModified: Date.now(),
+                    });
+                    file.absPath = f
+                    directoryFiles.value.push(file)
+                    cachedImages.value.push({name: file.name, url:URL.createObjectURL(file)})
+                    updateShowingUploadImage(cachedImages.value.length)
+                })
+            })
+        })
+        console.log(directoryFiles.value)
     }
 }
 
@@ -265,7 +267,6 @@ const writeToExcel = () => {
                         <el-button type="success" style="margin-top: 30px; width: 100%;" @click="uploadFileDirectory">
                             上传文件夹
                         </el-button>
-                        <input ref="folderInput" type="file" id="file" hidden @change="handleFileChange" webkitdirectory>
                     </el-card>
                 </div>
                 <div style="height: 50%;">

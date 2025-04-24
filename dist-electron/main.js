@@ -1,7 +1,8 @@
-import { ipcMain, BrowserWindow, dialog, app } from "electron";
+import { ipcMain, dialog, app, BrowserWindow } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import * as fs from "fs";
 createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, "..");
@@ -10,23 +11,36 @@ const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
-ipcMain.handle("select-files", async (event, options) => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  if (!win2) return null;
-  const { canceled, filePaths } = await dialog.showOpenDialog(win2, {
-    properties: ["openFile", "multiSelections"],
-    filters: [{ name: "Image", extensions: ["jpg", "png"] }],
-    ...options
+ipcMain.handle("select-directory", () => {
+  const result = dialog.showOpenDialogSync({ properties: ["openDirectory"] });
+  if (!result) return null;
+  const base_path = result[0];
+  const dir = fs.readdirSync(base_path);
+  var files = [];
+  dir.forEach((name) => {
+    files.push(path.join(base_path, name));
   });
-  return canceled ? null : filePaths;
+  return files;
 });
-ipcMain.handle("select-directory", async (event) => {
-  const win2 = BrowserWindow.getFocusedWindow();
-  if (!win2) return null;
-  const { canceled, filePaths } = await dialog.showOpenDialog(win2, {
-    properties: ["openDirectory"]
-  });
-  return canceled ? null : filePaths[0];
+ipcMain.handle("read-file", (_, file) => {
+  try {
+    const buffer = fs.readFileSync(file);
+    const fileName = path.basename(file);
+    const suffix = file.split(".").at(-1);
+    if (suffix == "jpeg" || suffix == "png") {
+      var fileType = "image/".concat(suffix);
+    } else if (suffix == "jpg") {
+      var fileType = "image/jpeg";
+    } else {
+      var fileType = "application/octet-stream";
+    }
+    return {
+      buffer: buffer.buffer,
+      fileName,
+      fileType
+    };
+  } catch (error) {
+  }
 });
 function createWindow() {
   win = new BrowserWindow({

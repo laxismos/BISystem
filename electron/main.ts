@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import * as fs from 'fs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -26,27 +27,38 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
-ipcMain.handle('select-files', async (event, options)=>{
-  const win = BrowserWindow.getFocusedWindow()
-  if (!win) return null
-
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-  properties: ['openFile', 'multiSelections'],
-  filters: [{ name: 'Image', extensions: ['jpg', 'png']}],
-  ...options
+ipcMain.handle('select-directory', ()=>{
+  const result = dialog.showOpenDialogSync({properties: ['openDirectory']})
+  if (!result) return null
+  const base_path = result[0]
+  const dir = fs.readdirSync(base_path)
+  var files:string[] = []
+  dir.forEach((name)=>{
+    files.push(path.join(base_path, name))
   })
-  return canceled ? null : filePaths
+  return files
 })
 
-ipcMain.handle('select-directory', async (event)=>{
-  const win = BrowserWindow.getFocusedWindow()
-  if (!win) return null
-
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    properties: ['openDirectory']
-  })
-
-  return canceled ? null : filePaths[0]
+ipcMain.handle('read-file', (_, file: string)=>{
+  try {
+    const buffer = fs.readFileSync(file)
+    const fileName = path.basename(file)
+    const suffix = file.split('.').at(-1)
+    if (suffix == 'jpeg' || suffix == 'png') {
+      var fileType = 'image/'.concat(suffix)
+    } else if(suffix == 'jpg'){
+      var fileType = 'image/jpeg'
+    } else {
+      var fileType = 'application/octet-stream'
+    }
+    return {
+      buffer: buffer.buffer,
+      fileName,
+      fileType
+    }
+  } catch (error) {
+    
+  }
 })
 
 function createWindow() {
