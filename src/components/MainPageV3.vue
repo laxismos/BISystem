@@ -3,8 +3,6 @@ import { ref } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
 import { ElNotification, type UploadProps, type UploadUserFile, type UploadInstance } from 'element-plus'
 import axios from 'axios'
-import ExcelJS from 'exceljs'
-
 
 interface PredictData {
   date: Date | string,
@@ -40,26 +38,26 @@ class PathFile extends File {
     }
 }
 
-const predictResult = ref<PredictData[]>([])
-const selectedOptions = ref<string[]>([])
-const cachedImages = ref<CachedImage[]>([])
-const typeMapper: KV = {'floors': '楼层数识别', 'add': '加层分析', 'material': '材质识别', 'hidden': '隐患检测'}
+const predictResult = ref<PredictData[]>([])    // 识别结果
+const selectedOptions = ref<string[]>([])   // 启用的选项
+const cachedImages = ref<CachedImage[]>([]) // 图片url缓存表
+const typeMapper: KV = {'floors': '楼层数识别', 'add': '加层分析', 'material': '材质识别', 'hidden': '隐患检测'} // 默认映射
 const sampleImageList = [
   {'url': '/valid_sample.jpg', desc:'楼层识别图像示例-1'},
   {'url': '/valid_sample2.jpg', desc:'楼层识别图像示例-2'}
-]
-const picShowValue = ref('示例图片')
+] // 示例图片
+const picShowValue = ref('示例图片') 
 const picShowValueList = ['示例图片', '已选择']
 const onLoading = ref(false)
 const uploadRef = ref<UploadInstance>() 
-const directoryFiles = ref<PathFile[]>([])
+const directoryFiles = ref<PathFile[]>([]) // 待上传的文件
 
-const showingUploadedImage = ref<CachedImage[]>([])
-const uploadPage = ref(1)
-const uploadShowCount = ref(50)
+const showingUploadedImage = ref<CachedImage[]>([]) // 缓存表的切片，用于控制分页显示
+const uploadPage = ref(1)   // 页码，尚未实现翻页
+const uploadShowCount = ref(50) // 页容量
 
-const resultPage = ref(1)
-const resultShowCount = ref(50)
+const resultPage = ref(1)   // 结果表的页面 TODO: 实习结果表
+const resultShowCount = ref(50) // 结果表的页容量
 
 const beforeUpload = (file: UploadUserFile) => {
   let raw = file.raw
