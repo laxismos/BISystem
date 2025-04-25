@@ -11,7 +11,7 @@ interface PredictData {
   image_name: string,
   content: string,
   type: string,
-  extra_data?: string
+  orgin_path?: string
 }
 
 interface CachedImage {
@@ -30,11 +30,13 @@ interface KV {
 }
 
 class PathFile extends File {
-    absPath?: string | undefined = ''
+    absPath?: string = ''
 
     constructor(fileBits: BlobPart[], fileName: string, path?: string, options?: FilePropertyBag) {
         super(fileBits, fileName, options)
-        this.absPath = path
+        if (path) {
+            this.absPath = path
+        }
     }
 }
 
@@ -161,8 +163,13 @@ const tryToPredict = (event: Event) => {
                 duration: 1500
             })
             let _content: ResponseType[] = response.data['content']
-            _content.forEach((e)=>{
-                predictResult.value.push({date: (new Date()).toLocaleDateString(), content: e['result'], type:typeMapper[e['type']], image_name:e['name']})
+            _content.forEach((e, index)=>{
+                predictResult.value.push({date: (new Date()).toLocaleDateString(), 
+                    content: e['result'], 
+                    type:typeMapper[e['type']], 
+                    image_name:e['name'],
+                    orgin_path: directoryFiles.value[index%directoryFiles.value.length].absPath
+                })
             })
         }).catch(error => {
             console.log(error)
@@ -219,6 +226,7 @@ const uploadFileDirectory = (event: Event) => {
                         lastModified: Date.now(),
                     });
                     file.absPath = f
+                    file.path
                     directoryFiles.value.push(file)
                     cachedImages.value.push({name: file.name, url:URL.createObjectURL(file)})
                     updateShowingUploadImage(cachedImages.value.length)
@@ -230,8 +238,10 @@ const uploadFileDirectory = (event: Event) => {
 }
 
 
-const writeToExcel = () => {
-
+const writeToExcel = (event: Event) => {
+    if (event) {
+        window.ipcRenderer.invoke('write-to-excel', predictResult.value[0].orgin_path)
+    }
 }
 </script>
 
@@ -307,6 +317,7 @@ const writeToExcel = () => {
                                 type="success"
                                 size="large"
                                 class="export-btn"
+                                @click="writeToExcel"
                             >
                                 导出为Excel
                             </el-button>    

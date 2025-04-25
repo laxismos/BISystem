@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import * as fs from 'fs'
+import ExcelJS from 'exceljs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -27,9 +28,15 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
+ipcMain.handle('select-files', ()=>{
+  const result = dialog.showOpenDialogSync({properties: ['openFile', 'multiSelections']})
+  if (!result) return []
+  return result
+})
+
 ipcMain.handle('select-directory', ()=>{
   const result = dialog.showOpenDialogSync({properties: ['openDirectory']})
-  if (!result) return null
+  if (!result) return []
   const base_path = result[0]
   const dir = fs.readdirSync(base_path)
   var files:string[] = []
@@ -59,6 +66,21 @@ ipcMain.handle('read-file', (_, file: string)=>{
   } catch (error) {
     
   }
+})
+
+ipcMain.handle('write-to-excel', (_, fp: string)=>{
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet('表1')
+  const imgId = workbook.addImage({
+    extension: 'jpeg',
+    filename: fp
+  })
+  worksheet.addImage(imgId, {
+      tl: {col: 0, row: 0},
+      ext: {width: 180, height: 320}
+  })
+  const p = app.getPath("documents")
+  workbook.xlsx.writeFile(path.join(p, 'test.xlsx'))
 })
 
 function createWindow() {
