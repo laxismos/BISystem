@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
-import { ElNotification, type UploadProps, type UploadUserFile, type UploadInstance } from 'element-plus'
+import { ElNotification } from 'element-plus'
 import axios from 'axios'
 
 interface PredictData {
-  date: Date | string,
+  date: string,
   image_name: string,
   content: string,
   type: string,
@@ -49,42 +49,14 @@ const sampleImageList = [
 const picShowValue = ref('示例图片') 
 const picShowValueList = ['示例图片', '已选择']
 const onLoading = ref(false)
-const uploadRef = ref<UploadInstance>() 
 const directoryFiles = ref<PathFile[]>([]) // 待上传的文件
 
 const showingUploadedImage = ref<CachedImage[]>([]) // 缓存表的切片，用于控制分页显示
 const uploadPage = ref(1)   // 页码，尚未实现翻页
-const uploadShowCount = ref(50) // 页容量
+const uploadShowCount = ref(20) // 页容量
 
 const resultPage = ref(1)   // 结果表的页面 TODO: 实习结果表
 const resultShowCount = ref(50) // 结果表的页容量
-
-const beforeUpload = (file: UploadUserFile) => {
-  let raw = file.raw
-  if (raw) {
-    const isFileTypeOK = raw.type === 'image/jpg' || raw.type === 'image/jpeg' || raw.type === 'image/png'
-    const isSizeOK = raw.size / 1024 / 1024 < 5
-    if (!isFileTypeOK) {
-      ElNotification({
-        title: '错误',
-        message: '不接受的图片类型！',
-        type: 'error',
-        duration: 1500
-      })
-      return false
-    }
-    if (!isSizeOK) {
-      ElNotification({
-        title: '错误',
-        message: '超过图片尺寸限制！',
-        type: 'error',
-        duration: 1500
-      })
-      return false
-    }
-    return true
-  }
-}
 
 const updateShowingUploadImage = (operationStartIndex: number) => {
     const startIndex = (uploadPage.value - 1) * uploadShowCount.value
@@ -92,26 +64,6 @@ const updateShowingUploadImage = (operationStartIndex: number) => {
         showingUploadedImage.value = cachedImages.value.slice(startIndex, startIndex+uploadShowCount.value)
     }
 }
-
-const handleUploadChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
-    console.log(uploadFile, uploadFiles)
-    if (uploadFile.raw) {
-        directoryFiles.value.push(uploadFile.raw)
-        const originLength = cachedImages.value.length
-        cachedImages.value.length = 0
-        directoryFiles.value.forEach((element)=>{
-            cachedImages.value.push({name: element.name, url: URL.createObjectURL(element)})
-        })
-        updateShowingUploadImage(originLength)
-        picShowValue.value = picShowValueList[1]
-    } else {
-        // TODO
-        return
-    }
-    console.log("DF", directoryFiles.value)
-}
-
-
 
 const checkFilesExist = () => {
   if (directoryFiles.value.length == 0) {
@@ -162,7 +114,7 @@ const tryToPredict = (event: Event) => {
             })
             let _content: ResponseType[] = response.data['content']
             _content.forEach((e, index)=>{
-                predictResult.value.push({date: (new Date()).toLocaleDateString(), 
+                predictResult.value.push({date: (new Date()).toLocaleString(), 
                     content: e['result'], 
                     type:typeMapper[e['type']], 
                     image_name:e['name'],
@@ -211,10 +163,32 @@ const tableRowClassName = ({
     }
 }
 
-// 文件夹处理
+// 文件上传
+const uploadFiles = (event: Event) => {
+    if (event) {
+        picShowValue.value = picShowValueList[1]
+        window.ipcRenderer.invoke('select-files').then((value: string[])=>{
+            value.forEach((f)=>{
+                window.ipcRenderer.invoke('read-file', f).then((fileData)=>{
+                    const blob = new Blob([fileData.buffer], { type: fileData.fileType });
+                    const file: PathFile = new File([blob], fileData.fileName, {
+                        type: fileData.fileType,
+                        lastModified: Date.now(),
+                    });
+                    file.absPath = f
+                    file.path
+                    directoryFiles.value.push(file)
+                    cachedImages.value.push({name: file.name, url:URL.createObjectURL(file)})
+                    updateShowingUploadImage(cachedImages.value.length)
+                })
+            })
+        })
+    }
+}
+
 const uploadFileDirectory = (event: Event) => {
     if (event) {
-        // folderInput.value?.click()
+        picShowValue.value = picShowValueList[1]
         window.ipcRenderer.invoke('select-directory').then((value: string[])=>{
             value.forEach((f)=>{
                 window.ipcRenderer.invoke('read-file', f).then((fileData)=>{
@@ -231,15 +205,20 @@ const uploadFileDirectory = (event: Event) => {
                 })
             })
         })
-        console.log(directoryFiles.value)
+        // console.log(directoryFiles.value)
     }
 }
 
 
 const writeToExcel = (event: Event) => {
     if (event) {
-        window.ipcRenderer.invoke('write-to-excel', predictResult.value[0].orgin_path)
+        window.ipcRenderer.invoke('write-to-excel', JSON.stringify(predictResult.value), true)
     }
+}
+
+const handleUploadPageChange = (page: number) => {
+    uploadPage.value = page
+    updateShowingUploadImage(0)
 }
 </script>
 
@@ -247,32 +226,18 @@ const writeToExcel = (event: Event) => {
     <div class="container">
         <el-row :gutter="20">
             <el-col :span="6">
-                <div style="height: 48%;  margin-bottom: 20px;">
+                <div style="height: 20%; margin-bottom: 20px;">
+                    <el-card class="tip-card">
+
+                    </el-card>
+                </div>
+                <div style="height: 28%;  margin-bottom: 20px;">
                     <el-card class="upload-card">
                         <div style="text-align: left; width: 100%; font-weight: bold; margin-bottom: 20px;">上传</div>
-                        <el-upload
-                            ref="uploadRef"
-                            class="upload-demo"
-                            drag
-                            action="#"
-                            :auto-upload="false"
-                            list-type="picture"
-                            accept="image/jpeg, image/png"
-                            :show-file-list="false"
-                            :before-upload="beforeUpload"
-                            :on-change="handleUploadChange"
-                            :multiple="true"
-                        >
-                            <div class="el-upload__text">
-                                拖拽图片到此处或 <em>点击上传</em>
-                            </div>
-                            <template #tip>
-                                <div class="el-upload__tip">
-                                    支持格式：JPEG/PNG，最大5MB
-                                </div>
-                            </template>
-                        </el-upload>
-                        <el-button type="success" style="margin-top: 30px; width: 100%;" @click="uploadFileDirectory">
+                        <el-button type="primary" style="margin-top: 30px; width: 100%;" @click="uploadFiles">
+                            上传文件
+                        </el-button>
+                        <el-button type="success" style="margin: auto; margin-top: 30px; width: 100%;" @click="uploadFileDirectory">
                             上传文件夹
                         </el-button>
                     </el-card>
@@ -324,7 +289,7 @@ const writeToExcel = (event: Event) => {
                     </el-card>
                 </div>
             </el-col>
-            <el-col :span="8" style="height: 900px;">
+            <el-col :span="9" style="height: 900px;">
                 <div style="height: 100%;">
                     <el-card class="example-card">
                         <template #header>
@@ -339,29 +304,39 @@ const writeToExcel = (event: Event) => {
                             </el-carousel-item>
                         </el-carousel>
                         <div v-else>
-                            <el-empty v-if="directoryFiles.length == 0" description="暂无图片" />
-                            <div v-else>
-                                <el-table :data="showingUploadedImage" :show-header="false" height="400px">
-                                    <el-table-column width="120">
-                                        <template #default="scope">
-                                            <el-image preview-teleported :src="scope.row.url" />
-                                        </template>
-                                    </el-table-column>
-                                    <el-table-column prop="name" width="240"/>
-                                    <el-table-column fixed="right">
-                                        <template #default="scope">
-                                            <el-button @click.prevent="deleteRow(scope.$index)" style="border: none;"><el-icon><Delete /></el-icon></el-button>
-                                        </template>
-                                    </el-table-column>
-                                </el-table>
-                                <el-pagination layout="total, prev, pager, next, jumper" :total="cachedImages.length" />
+                            <div style="height: 400px;">
+                                <el-empty v-if="directoryFiles.length == 0" description="暂无图片" />
+                                <div v-else>
+                                    <el-table :data="showingUploadedImage" :show-header="false" height="400px">
+                                        <el-table-column width="120">
+                                            <template #default="scope">
+                                                <el-image preview-teleported :src="scope.row.url" />
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column prop="name" width="240"/>
+                                        <el-table-column fixed="right">
+                                            <template #default="scope">
+                                                <el-button @click.prevent="deleteRow(scope.$index)" style="border: none;"><el-icon><Delete /></el-icon></el-button>
+                                            </template>
+                                        </el-table-column>
+                                    </el-table>
+                                    <el-pagination 
+                                    layout="total, prev, pager, next, jumper" 
+                                    size="small"
+                                    :total="cachedImages.length" 
+                                    :page-size="uploadShowCount"
+                                    @current-change="handleUploadPageChange"
+                                    style="margin-top: 10px;"
+                                    />
+                                    
+                                </div>
                             </div>
-                            
+                            <el-card style="margin-top: 40px;"></el-card>
                         </div>
                     </el-card>
                 </div>
             </el-col>
-            <el-col :span="10">
+            <el-col :span="9">
                 <div style="height: 100%;">
                     <el-card class="result-card">
                         <template #header style="width: 100%;">
@@ -388,6 +363,11 @@ const writeToExcel = (event: Event) => {
   margin: auto;
   margin-top: 10px;
   padding: 0;
+}
+
+.tip-card {
+    height: 100%;
+    border-radius: 12px;
 }
 
 .upload-card {

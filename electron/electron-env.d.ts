@@ -25,3 +25,11 @@ declare namespace NodeJS {
 interface Window {
   ipcRenderer: import('electron').IpcRenderer
 }
+
+interface PredictData {
+  date: string,
+  image_name: string,
+  content: string,
+  type: string,
+  orgin_path?: string
+}
