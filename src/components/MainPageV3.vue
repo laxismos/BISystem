@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
 import axios from 'axios'
@@ -10,6 +10,13 @@ interface PredictData {
   content: string,
   type: string,
   orgin_path?: string
+  details?: Array<{  // 新增安全隐患详情字段
+    id: number,
+    class_name: string,
+    confidence: number,
+    bbox: number[] 
+    area: number
+  }>
 }
 
 interface CachedImage {
@@ -54,9 +61,6 @@ const directoryFiles = ref<PathFile[]>([]) // 待上传的文件
 const showingUploadedImage = ref<CachedImage[]>([]) // 缓存表的切片，用于控制分页显示
 const uploadPage = ref(1)   // 页码，尚未实现翻页
 const uploadShowCount = ref(20) // 页容量
-
-const resultPage = ref(1)   // 结果表的页面 TODO: 实习结果表
-const resultShowCount = ref(50) // 结果表的页容量
 
 const updateShowingUploadImage = (operationStartIndex: number) => {
     const startIndex = (uploadPage.value - 1) * uploadShowCount.value
@@ -175,8 +179,8 @@ const uploadFiles = (event: Event) => {
                         type: fileData.fileType,
                         lastModified: Date.now(),
                     });
-                    file.absPath = f
-                    file.path
+                    file.absPath = f,
+                    (file as any).path
                     directoryFiles.value.push(file)
                     cachedImages.value.push({name: file.name, url:URL.createObjectURL(file)})
                     updateShowingUploadImage(cachedImages.value.length)
@@ -197,8 +201,8 @@ const uploadFileDirectory = (event: Event) => {
                         type: fileData.fileType,
                         lastModified: Date.now(),
                     });
-                    file.absPath = f
-                    file.path
+                    file.absPath = f,
+                    (file as any).path
                     directoryFiles.value.push(file)
                     cachedImages.value.push({name: file.name, url:URL.createObjectURL(file)})
                     updateShowingUploadImage(cachedImages.value.length)
@@ -220,6 +224,34 @@ const handleUploadPageChange = (page: number) => {
     uploadPage.value = page
     updateShowingUploadImage(0)
 }
+
+const detailDialogVisible = ref(false) // 控制弹窗显示
+
+// 定义单个隐患的接口
+interface DetailType {
+  id: number
+  class_name: string
+  area: number
+}
+
+// 初始化响应式数组
+const currentDetails = ref<DetailType[]>([])
+
+// 显示详情弹窗
+const showDetails = (details: PredictData['details']) => {
+  currentDetails.value = details || []
+  detailDialogVisible.value = true
+}
+
+const totalArea = computed(() => {
+  return currentDetails.value.reduce((sum, item) => sum + item.area, 0)
+})
+
+// 删除隐患条目
+const deleteDetail = (index: number) => {
+  currentDetails.value.splice(index, 1) // 直接修改 .value
+}
+
 </script>
 
 <template>
@@ -346,7 +378,19 @@ const handleUploadPageChange = (page: number) => {
                         <el-table v-else :data="predictResult" :row-class-name="tableRowClassName" height="800px">
                             <el-table-column type="index" label="序号" width="80" />
                             <el-table-column prop="image_name" label="图片名称" width="320" />
-                            <el-table-column prop="content" label="结果" width="120"/>
+                            <el-table-column label="结果" width="200" align="center">
+                                <template #default="scope">
+                                    <div v-if="scope.row.type === '隐患检测'">
+                                        <div v-for="(detail, index) in scope.row.details?.slice(0, 2)" :key="index">
+                                            {{ detail.class_name }} ({{ detail.area.toFixed(2) }}px²)
+                                        </div>
+                                        <span v-if="scope.row.details?.length > 2">...</span>
+                                    </div>
+                                    <div v-else>
+                                        {{ scope.row.content }}
+                                    </div>
+                                </template>
+                            </el-table-column>
                             <el-table-column prop="type" label="任务类型" width="120" sortable />
                             <el-table-column prop="date" label="识别日期" sortable />
                         </el-table>
@@ -354,6 +398,37 @@ const handleUploadPageChange = (page: number) => {
                 </div>
             </el-col>
         </el-row>
+
+        <el-dialog v-model="detailDialogVisible" title="安全隐患详情" width="800px">
+            <div class="statistics">
+                <el-tag type="info">隐患总数：{{ currentDetails.length }}</el-tag>
+                <el-tag type="warning">
+                    总面积：{{ totalArea.toFixed(2) }}px²
+                </el-tag>
+            </div>
+            <el-table :data="currentDetails" border height="400px">
+                <el-table-column label="编号" width="100" align="center">
+                    <template #default="scope">
+                        {{ scope.$index + 1 }}
+                    </template>
+                </el-table-column>
+                <el-table-column prop="class_name" label="类型" align="center" />
+                <el-table-column label="面积（像素²）" align="center">
+                    <template #default="scope">
+                        {{ scope.row.area.toFixed(2) }}
+                    </template>
+                </el-table-column>
+                <el-table-column label="操作" width="80" align="center">
+                    <template #default="scope">
+                        <el-button
+                        type="danger"
+                        size="small"
+                        @click="deleteDetail(scope.$index)"
+                        >删除</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </el-dialog>
     </div>
 </template>
 
@@ -436,5 +511,10 @@ const handleUploadPageChange = (page: number) => {
 }
 .el-table .risk-row {
     --el-table-tr-bg-color: #f8cccc;
+}
+.statistics {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
 }
 </style>
