@@ -647,4 +647,9 @@ const deleteDetail = (index: number) => {
   display: flex;
   gap: 12px;
 }
+.statistics {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+}
 </style>
