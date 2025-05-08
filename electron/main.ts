@@ -57,7 +57,7 @@ async function writeToExcel(fp: PredictData[], baseWorkbook?: ExcelJS.Workbook, 
       }
       worksheet.mergeCells(`A${curLine}:A${curLine+3}`)
       if (pd.orgin_path) {
-        const imgSuffix= pd.image_name.split('.').at(-1)
+        const imgSuffix= pd.image_name.split('.').at(-1)?.toLocaleLowerCase()
         const imgType = imgSuffix == 'jpg' || imgSuffix == 'jpeg' ? 'jpeg' : 'png'
         const img = (await Jimp.read(pd.orgin_path!)).resize({w:128})
         const buf = await img.getBuffer(imgType == 'jpeg' ? 'image/jpeg' : 'image/png')
@@ -103,7 +103,7 @@ ipcMain.handle('read-file', (_, file: string)=>{
   try {
     const buffer = fs.readFileSync(file)
     const fileName = path.basename(file)
-    const suffix = file.split('.').at(-1)
+    const suffix = file.split('.').at(-1)?.toLocaleLowerCase()
     if (suffix == 'jpeg' || suffix == 'png') {
       var fileType = 'image/'.concat(suffix)
     } else if(suffix == 'jpg'){

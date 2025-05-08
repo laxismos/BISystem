@@ -13,10 +13,10 @@
     "@types/jimp": "^0.2.28",
     "axios": "^1.8.4",
     "bisystem": "file:",
+    "canvas": "^3.1.0",
     "element-plus": "^2.9.7",
     "exceljs": "^4.4.0",
     "jimp": "^1.6.0",
-    "sharp": "^0.34.1",
     "vue": "^3.4.21"
   },
   "devDependencies": {

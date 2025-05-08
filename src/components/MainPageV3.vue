@@ -13,7 +13,8 @@ interface PredictData {
   details?: Array<{  // 新增安全隐患详情字段
     id: number,
     class_name: string,
-    area: number
+    area: number,
+    box?: number[][]
   }>
 }
 
@@ -65,6 +66,7 @@ const predictPageVolume = ref(20)
 
 const selectedRow = ref<PredictData>()
 const selectedImage = ref('')
+const BATCHES = 50
 
 const checkFilesExist = () => {
   if (directoryFiles.value.length == 0) {
@@ -92,63 +94,82 @@ const checkOptions = () => {
   return true
 }
 
-const tryToPredict = (event: Event) => {
-  if (event) {
-    if (checkFilesExist() && checkOptions()) {
-        onLoading.value = true
-        // TODO 创建任务并执行
-        let form = new FormData()
-        directoryFiles.value.forEach((e)=>{
-            form.append('options', JSON.stringify(selectedOptions.value))
-            form.append('image', e)
+const smallPatchSend = (form:FormData) => {
+    axios.post('http://127.0.0.1:8000/building/', form, {
+        headers: {
+        "Content-Type": "multipart/form-data"
+        }
+    }).then(response => {
+        console.info("上传完成", response.data)
+        ElNotification({
+            title: '完成',
+            message: '识别完成！',
+            type: 'success',
+            duration: 1500
         })
-        axios.post('http://127.0.0.1:8000/building/', form, {
-            headers: {
-            "Content-Type": "multipart/form-data"
+        let _content: ResponseType[] = response.data['content']
+        const whenToUpdate = (_content.length < predictPageVolume.value ? _content.length : predictPageVolume.value) - 1
+        _content.forEach((e, index)=>{
+            let details:PredictData['details'] = undefined
+            let result = e['result']
+            if (e['type'] == 'hidden') {
+                details = (JSON.parse(result) as PredictData['details'])
+                if (result == '[]') {
+                    result = '无隐患检出！'
+                }
             }
-        }).then(response => {
-            console.log("上传完成", response.data)
-            ElNotification({
-                title: '完成',
-                message: '识别完成！',
-                type: 'success',
-                duration: 1500
+            predictResult.value.push({date: (new Date()).toLocaleString(), 
+                content: result, 
+                type:typeMapper[e['type']], 
+                image_name:e['name'],
+                orgin_path: directoryFiles.value[index%directoryFiles.value.length].absPath,
+                details: details
             })
-            let _content: ResponseType[] = response.data['content']
-            const whenToUpdate = (_content.length < predictPageVolume.value ? _content.length : predictPageVolume.value) - 1
-            _content.forEach((e, index)=>{
-                let details:PredictData['details'] = undefined
-                let result = e['result']
-                if (e['type'] == 'hidden') {
-                    details = (JSON.parse(result) as PredictData['details'])
-                    if (result == '[]') {
-                        result = '无隐患检出！'
-                    }
-                }
-                predictResult.value.push({date: (new Date()).toLocaleString(), 
-                    content: result, 
-                    type:typeMapper[e['type']], 
-                    image_name:e['name'],
-                    orgin_path: directoryFiles.value[index%directoryFiles.value.length].absPath,
-                    details: details
-                })
-                if (index == whenToUpdate) {
-                    updatePredictResult(0)
-                }
-            })
-        }).catch(error => {
-            console.log(error)
-            ElNotification({
-                title: '错误',
-                message: '识别失败！',
-                type: 'error',
-                duration: 1500
-            })
-        }).finally(() => {
-            onLoading.value = false
+            if (index == whenToUpdate) {
+                updatePredictResult(0)
+            }
         })
+    }).catch(error => {
+        console.error(error)
+        ElNotification({
+            title: '错误',
+            message: '识别失败！',
+            type: 'error',
+            duration: 1500
+        })
+    }).finally(() => {
+        onLoading.value = false
+    })
+}
+
+const tryToPredict = (event: Event) => {
+    if (event) {
+        if (checkFilesExist() && checkOptions()) {
+            onLoading.value = true
+            // TODO 创建任务并执行
+            const total = directoryFiles.value.length
+            console.info("Total send:", total)
+            if (total<=100) {
+                let form = new FormData()
+                form.append('options', JSON.stringify(selectedOptions.value))
+                directoryFiles.value.forEach((e)=>{
+                    form.append('image', e)
+                    console.log(e)
+                })
+                smallPatchSend(form)
+            } else {
+                for (let index=0; index<total; index+=BATCHES) {
+                    let slice = directoryFiles.value.slice(index, BATCHES)
+                    let form = new FormData()
+                    form.append('options', JSON.stringify(selectedOptions.value))
+                    slice.forEach((e)=>{
+                        form.append('image', e)
+                    })
+                    smallPatchSend(form)
+                }
+            }
+        }
     }
-  }
 }
 
 //分页表
@@ -183,13 +204,73 @@ const handlePredictResultPageChange = (page: number) => {
     updatePredictResult(0)
 }
 
+function drawImageWithRectangle(img: HTMLImageElement, boxes:number[][][]) {
+    // 创建 Canvas 元素
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // 设置 Canvas 尺寸与图片一致
+    canvas.width = img.width;
+    canvas.height = img.height;
+
+    // 绘制原始图片
+    if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        // 绘制矩形边框
+        
+        boxes.forEach((box)=>{
+            ctx.beginPath()
+            ctx.moveTo(box[0][0], box[0][1])
+            box.slice(1).forEach((p)=>{
+                ctx.lineTo(p[0], p[1])
+            })
+            ctx.closePath()
+            ctx.strokeStyle = '#FF0000'; // 红色边框
+            ctx.lineWidth = 5;
+            // ctx.fillStyle = '#FFA500'; // 填充颜色
+            // ctx.fill()
+            ctx.stroke()
+        })
+        
+
+        canvas.toBlob((newBlob) => {
+            if (newBlob) {
+                selectedImage.value = URL.createObjectURL(newBlob)
+            }
+        }, 'image/jpeg', 0.9);
+    }
+}
+
 const handlePredictResultSelectedRowChange = (row: PredictData) => {
     selectedRow.value = row
+    URL.revokeObjectURL(selectedImage.value)
     if (row.orgin_path) {
-        window.ipcRenderer.invoke('read-file', row.orgin_path).then((fileData)=>{
-            const blob = new Blob([fileData.buffer], { type: fileData.fileType });
-            selectedImage.value = URL.createObjectURL(blob)
+        let boxes:number[][][] = []
+        row.details?.forEach((d)=>{
+            if (d.box) {
+                boxes.push(d.box)
+            }
         })
+        if (row.details) {
+            window.ipcRenderer.invoke('read-file', row.orgin_path).then((fileData)=>{
+                const blob = new Blob([fileData.buffer], { type: fileData.fileType });
+                const imageUrl = URL.createObjectURL(blob);
+                const img = new Image();
+
+                // 等待图片加载完成
+                img.onload = () => {
+                    drawImageWithRectangle(img, boxes);
+                    URL.revokeObjectURL(imageUrl); // 释放临时 URL
+                };
+                img.onerror = () => console.error("图片加载失败");
+                img.src = imageUrl;
+            })
+        } else {
+            window.ipcRenderer.invoke('read-file', row.orgin_path).then((fileData)=>{
+                const blob = new Blob([fileData.buffer], { type: fileData.fileType });
+                selectedImage.value = URL.createObjectURL(blob)
+            })
+        }
     }
 }
 
