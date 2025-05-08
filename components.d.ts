@@ -8,7 +8,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    DSPage: typeof import('./src/components/DSPage.vue')['default']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
@@ -32,7 +31,5 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElText: typeof import('element-plus/es')['ElText']
     MainPageV3: typeof import('./src/components/MainPageV3.vue')['default']
-    NewPage: typeof import('./src/components/NewPage.vue')['default']
-    Predictor: typeof import('./src/components/Predictor.vue')['default']
   }
 }
