@@ -1,12 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { createRequire } from 'node:module'
+// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import * as fs from 'fs'
 import ExcelJS from 'exceljs'
 import { Jimp } from 'jimp'
 
-const require = createRequire(import.meta.url)
+// const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure

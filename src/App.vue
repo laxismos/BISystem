@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import NewPage from './components/NewPage.vue';
 import MainPageV3 from './components/MainPageV3.vue';
 </script>
 

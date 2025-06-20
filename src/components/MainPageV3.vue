@@ -67,6 +67,7 @@ const predictPageVolume = ref(20)
 const selectedRow = ref<PredictData>()
 const selectedImage = ref('')
 const BATCHES = 50
+const url = ref("http://127.0.0.1:8000/building/")
 
 const checkFilesExist = () => {
   if (directoryFiles.value.length == 0) {
@@ -95,7 +96,7 @@ const checkOptions = () => {
 }
 
 const smallPatchSend = (form:FormData) => {
-    axios.post('http://127.0.0.1:8000/building/', form, {
+    axios.post(url.value, form, {
         headers: {
         "Content-Type": "multipart/form-data"
         }
