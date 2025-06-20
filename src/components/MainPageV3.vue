@@ -48,8 +48,8 @@ const predictResult = ref<PredictData[]>([])    // 识别结果
 const selectedOptions = ref<string[]>([])   // 启用的选项
 const typeMapper: KV = {'floors': '楼层数识别', 'add': '加层分析', 'material': '材质识别', 'hidden': '隐患检测'} // 默认映射
 const sampleImageList = [
-  {'url': '/valid_sample.jpg', desc:'楼层识别图像示例-1'},
-  {'url': '/valid_sample2.jpg', desc:'楼层识别图像示例-2'}
+  {'url': './valid_sample.jpg', desc:'楼层识别图像示例-1'},
+  {'url': './valid_sample2.jpg', desc:'楼层识别图像示例-2'}
 ] // 示例图片
 const picShowValue = ref('示例图片') 
 const picShowValueList = ['示例图片', '已选择']
